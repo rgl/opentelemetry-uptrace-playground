@@ -1,0 +1,108 @@
+# see https://uptrace.dev/get/config.html
+
+logs:
+  # NB level can be one of: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL.
+  level: INFO
+
+listen:
+  # OTLP/gRPC API.
+  grpc:
+    addr: ':14317'
+  # OTLP/HTTP API and Uptrace API with UI.
+  http:
+    addr: ':14318'
+
+ch_schema:
+  compression: ZSTD(3)
+  replicated: false
+  spans:
+    ttl_delete: 7 DAY
+    storage_policy: 'default'
+  metrics:
+    ttl_delete: 30 DAY
+    storage_policy: 'default'
+
+ch:
+  addr: clickhouse:9000
+  user: default
+  password:
+  database: uptrace
+  max_execution_time: 30s
+
+pg:
+  addr: postgres:5432
+  user: uptrace
+  password: uptrace
+  database: uptrace
+
+smtp_mailer:
+  enabled: true
+  host: mailpit
+  port: 1025
+  auth_type: ''
+  tls:
+    disabled: true
+
+auth:
+  users:
+    - name: uptrace
+      email: uptrace@localhost
+      password: uptrace
+      notify_by_email: true
+
+projects:
+  - id: 1
+    name: Uptrace
+    token: uptrace
+    pinned_attrs:
+      - service
+      - host_name
+      - deployment_environment
+    group_by_env: false
+    group_funcs_by_service: false
+    prom_compat: true
+  - id: 2
+    name: Example
+    token: example
+    pinned_attrs:
+      - service
+      - host_name
+      - deployment_environment
+    group_by_env: false
+    group_funcs_by_service: false
+    prom_compat: true
+
+metrics:
+  drop_attrs:
+    - telemetry.sdk.language
+    - telemetry.sdk.name
+    - telemetry.sdk.version
+
+metrics_from_spans:
+  - name: uptrace_tracing_spans
+    description: Spans duration (excluding events)
+    instrument: histogram
+    unit: microseconds
+    value: _duration / 1000
+    attrs:
+      - _system
+      - _group_id
+      - service_name
+      - host_name
+      - _status_code
+    annotations:
+      - display_name
+    where: _event_name = ''
+  - name: uptrace_tracing_events
+    description: Events count (excluding spans)
+    instrument: counter
+    unit: 1
+    value: _count
+    attrs:
+      - _system
+      - _group_id
+      - _name
+      - host_name
+    annotations:
+      - display_name
+    where: _is_event = 1

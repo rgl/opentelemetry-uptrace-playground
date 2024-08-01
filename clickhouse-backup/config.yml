@@ -1,0 +1,7 @@
+general:
+  log_level: error
+clickhouse:
+  host: clickhouse
+  port: 9000
+  username: default
+  password:

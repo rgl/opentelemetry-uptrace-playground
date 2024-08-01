@@ -1,0 +1,112 @@
+# see https://github.com/compose-spec/compose-spec/blob/master/spec.md
+# see https://github.com/opencontainers/image-spec/blob/master/annotations.md
+services:
+  mailpit:
+    # see https://hub.docker.com/r/axllent/mailpit
+    # see https://github.com/axllent/mailpit
+    # see https://mailpit.axllent.org/docs/install/docker/
+    image: axllent/mailpit:v1.19.3
+    command:
+      - --smtp-auth-accept-any
+      - --smtp-auth-allow-insecure
+    ports:
+      # http.
+      # http://localhost:8025
+      - 8025:8025
+    restart: on-failure
+  clickhouse:
+    # see https://hub.docker.com/r/clickhouse/clickhouse-server
+    # see https://github.com/ClickHouse/ClickHouse/tree/master/docker/server
+    image: clickhouse/clickhouse-server:24.7.1.2915
+    restart: on-failure
+    environment:
+      CLICKHOUSE_DB: uptrace
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'localhost:8123/ping']
+      interval: 10s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - clickhouse:/var/lib/clickhouse
+    ports:
+      # see https://clickhouse.com/docs/en/guides/sre/network-ports
+      # http.
+      - '8123:8123'
+      ## native clickhouse tcp.
+      #- '9000:9000'
+  clickhouse-backup:
+    profiles:
+      - tool
+    # see https://hub.docker.com/r/altinity/clickhouse-backup
+    # see https://github.com/Altinity/clickhouse-backup
+    image: altinity/clickhouse-backup:2.5.20
+    volumes:
+      - ./clickhouse-backup/config.yml:/etc/clickhouse-backup/config.yml
+      - clickhouse:/var/lib/clickhouse
+  postgres:
+    # see https://hub.docker.com/_/postgres
+    image: postgres:16.3
+    restart: on-failure
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: uptrace
+      POSTGRES_PASSWORD: uptrace
+      POSTGRES_DB: uptrace
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'uptrace', '-d', 'uptrace']
+      interval: 10s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres:/var/lib/postgresql/data/pgdata
+    #ports:
+    #  # native postgres tcp.
+    #  - '5432:5432'
+  uptrace:
+    # see https://hub.docker.com/r/uptrace/uptrace
+    # see https://github.com/uptrace/uptrace/tree/master/cmd/uptrace
+    image: uptrace/uptrace:1.7.6
+    restart: on-failure
+    volumes:
+      - ./uptrace/uptrace.yml:/etc/uptrace/uptrace.yml
+    ports:
+      ## OTLP/gRPC API.
+      #- '14317:14317'
+      # OTLP/HTTP API and Uptrace API with UI.
+      - '14318:14318'
+    depends_on:
+      mailpit:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+  otelcol:
+    # see https://hub.docker.com/r/otel/opentelemetry-collector-contrib/tags
+    # see https://opentelemetry.io/docs/collector/installation/
+    # see https://github.com/open-telemetry/opentelemetry-collector
+    # see https://github.com/open-telemetry/opentelemetry-collector-contrib
+    # see https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/examples/demo/docker-compose.yaml
+    image: otel/opentelemetry-collector-contrib:0.106.1
+    command:
+      - --config=/etc/otelcol/config.yml
+    #ports:
+    #  # otlp/grpc.
+    #  - 4317:4317
+    volumes:
+      - ./otelcol/config.yml:/etc/otelcol/config.yml
+    restart: on-failure
+  quotes:
+    build: quotes
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otelcol:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - ASPNETCORE_URLS=http://+:8000
+    ports:
+      # http api.
+      # http://localhost:8000
+      - 8000:8000
+    restart: on-failure
+volumes:
+  clickhouse:
+  postgres:

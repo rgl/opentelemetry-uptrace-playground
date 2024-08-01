@@ -1,0 +1,44 @@
+# see https://github.com/open-telemetry/opentelemetry-collector/blob/main/receiver/README.md
+# see https://github.com/open-telemetry/opentelemetry-collector/blob/main/receiver/otlpreceiver/README.md
+# see https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/README.md
+# see https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/otlpexporter/README.md
+# see https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/README.md
+# see https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/prometheusexporter/README.md
+# see https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/lokiexporter/README.md
+# see https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/pkg/translator/loki/logs_to_loki.go
+# see https://grafana.com/docs/opentelemetry/collector/send-logs-to-loki/
+# see https://github.com/grafana/loki/issues/5346
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+exporters:
+  otlp/uptrace:
+    endpoint: uptrace:14317
+    tls:
+      insecure: true
+    headers:
+      uptrace-dsn: http://example@localhost:14318?grpc=14317
+
+processors:
+  batch:
+    send_batch_size: 10000
+    timeout: 10s
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/uptrace]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/uptrace]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/uptrace]
